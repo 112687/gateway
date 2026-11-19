@@ -55,3 +55,23 @@ app_mqtt_test: test/app_mqtt_test.c $(app_mqtt) $(log)
 	gcc $(CFLAGS) $(filter %.c,$^) -o $@ -I thirdparty -I app -lpaho-mqtt3c
 	./$@
 	rm $@
+
+app_pool := app/app_pool.c app/app_pool.h
+.PHONY : app_pool_test
+app_pool_test: test/app_pool_test.c $(app_pool) $(log)
+	gcc $(CFLAGS) $(filter %.c,$^) -o $@ -I thirdparty -I app -pthread
+	./$@
+	rm $@
+
+app_buffer := app/app_buffer.c app/app_buffer.h
+.PHONY : app_buffer_test
+app_buffer_test: test/app_buffer_test.c $(app_buffer) $(log)
+	gcc $(CFLAGS) $(filter %.c,$^) -o $@ -I thirdparty -I app -pthread
+	./$@
+	rm $@
+
+.PHONY : testfork
+testfork: test/process/fork.c
+	gcc $(CFLAGS) $< -o $@
+	./$@
+	rm $@
