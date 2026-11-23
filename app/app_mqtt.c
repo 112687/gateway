@@ -104,7 +104,7 @@ int app_mqtt_init(){
   */
  int app_mqtt_send(char *json){
     pubmsg.payload = json;
-    pubmsg.payloadlen = strlen(json)+1;
+    pubmsg.payloadlen = strlen(json);
     pubmsg.qos = QOS;
     int is_message = MQTTClient_publishMessage(client, TOPIC_PUSH, &pubmsg, NULL);
     if(is_message == MQTTCLIENT_SUCCESS){

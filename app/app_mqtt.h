@@ -2,10 +2,10 @@
 #define __APP_MQTT_H
 
 
-#define ADDRESS     "tcp://127.0.0.1:1883"
+#define ADDRESS     "ws://10.0.2.2:1883"
 #define CLIENTID    "b253ba38-daf6-4b37-984f-5d8fdc6a1cfa" 
-#define TOPIC_PULL       "REMOTE_TO_GATEWAY"
-#define TOPIC_PUSH       "GATEWAY_TO_REMOTE"
+#define TOPIC_PULL       "remote_to_gateway"
+#define TOPIC_PUSH       "gateway_to_remote"
 #define PAYLOAD     "Hello World!"
 #define QOS         1
 #define TIMEOUT     10000L

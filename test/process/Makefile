@@ -12,3 +12,9 @@ execve: execve.c other
 	gcc $(CFLAGS) $< -o $@
 	./$@
 	rm $@ other
+
+
+signal: signal.c
+	gcc $(CFLAGS) $< -o $@
+	./$@
+	rm $@

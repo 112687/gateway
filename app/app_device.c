@@ -3,7 +3,7 @@
 #include "app_device.h"
 #include "app_message.h"
 #include "log/log.h"
-
+#include "app_pool.h"
 #include "app_mqtt.h"
 #include "app_common.h"
 #include <stdlib.h>
@@ -27,8 +27,8 @@ Device *app_device_init(char *filename){
     //初始化device的各个成员
     device->filename = filename;
     device->fd = open(filename, O_RDWR);
-    device->upbuffer = app_buffer_init(DEVICE_BUFFER_SIZE);
-    device->downbuffer = app_buffer_init(DEVICE_BUFFER_SIZE);
+    device->upbuffer = add_Buffer_Init(DEVICE_BUFFER_SIZE);
+    device->downbuffer = add_Buffer_Init(DEVICE_BUFFER_SIZE);
     device->is_running = 0;
     device->post_read = NULL;
     device->pre_write = NULL;
@@ -52,10 +52,10 @@ static int send_msg_fun(void *arg){
    //从上行缓冲区中读取一个字符数组message数组
     char data_buf[128];
 
-   int data_len =  add_buffer_Read(device->upbuffer,data_buf, sizeof(data_buf));
+   int data_len =  add_Buffer_Read(device->upbuffer,data_buf, sizeof(data_buf));
 
    //将字符数组message转换成json
-   char *json = app_messsage_chars2json(data_buf, data_len);
+   char *json = app_message_chars2Json(data_buf, data_len);
 
    //发送json给mqtt模块
    int result = app_mqtt_send(json);
@@ -79,15 +79,20 @@ static void *read_thread_fun(void *arg){
         //将蓝牙数据转换成字符数组message
         if(data_len > 0 && device -> post_read){
             data_len = device->post_read(data_buf, data_len);
-}
+        }
+        /* Partial UART frames and failed reads are not publishable messages. */
+        if (data_len <= 0) {
+            continue;
+        }
             //将message写入上行缓冲区
-            app_buffer_write(device->upbuffer, data_buf, data_len);
+            add_Buffer_Write(device->upbuffer, data_buf, data_len);
 
             //将发送消息的任务交给线程池模块完成(添加一个发送消息的任务:send_msg_fun)
             app_pool_addTask(send_msg_fun, NULL);
 
         
     }
+    return NULL;
 } 
 static int write_task_fun(void *arg){ 
     Device *device = (Device *)arg;
@@ -95,7 +100,7 @@ static int write_task_fun(void *arg){
     char data_buf[128];
     
     
-    int data_len = app_buffer_read(device->downbuffer, data_buf, sizeof(data_buf));
+    int data_len = add_Buffer_Read(device->downbuffer, data_buf, sizeof(data_buf));
     //把字符数组messsage转换成蓝牙数据
 
     if (device->pre_write){
@@ -134,32 +139,34 @@ static int recv_msg_callback(char *json)
 {
     //将json转换成字符数组message
     char data_buf[128];
-    int data_len = app_messsage_json2chars(json, data_buf,sizeof(data_buf));
+    int data_len = app_message_json2Chars(json, data_buf,sizeof(data_buf));
 
     //将message写入下行缓冲区
-    app_buffer_write(device->downbuffer, data_buf, data_len);
+    add_Buffer_Write(device->downbuffer, data_buf, data_len);
 
 
     //将后面写入蓝牙模块的串口文件的任务交给线程池模块完成(添加一个将下行缓冲区数据写入蓝牙模块的串口文件的任务)
-    app_pool_addTask(write_task_fun, device);
+    return app_pool_addTask(write_task_fun, device);
 }
 
 /**
  * 启动
  */
 int app_device_start(){
-    if(device -> is_running){
+    if(device -> is_running==1){
         log_error("线程已经在运行");
         return 0;
     }
+    device->is_running = 1;
 
 
     //启动多线程去读蓝牙的数据 上行流程
-    pthread_create(&device->post_read, NULL, read_thread_fun, device);
+    pthread_create(&device->read_thread, NULL, read_thread_fun, NULL);
 
     //启动下行流程 :给mqtt模块注册一个接收远程消息的回调函数
+    app_mqtt_registerRecvcallback(recv_msg_callback);
 
-
+ return 0;
 }
 
  /**
@@ -169,11 +176,11 @@ void app_device_close(){
     //关闭文件
     close(device->fd);
     //释放buffer
-    app_buffer_free(device->upbuffer);
-    app_buffer_free(device->downbuffer);
+    Buffer_Destroy(device->upbuffer);
+    Buffer_Destroy(device->downbuffer);
     //取消读线程
-    pthread_cancel(*device->post_read);
-    pthread_join(*device->post_read, NULL);
+    pthread_cancel(device->read_thread);
+    pthread_join(device->read_thread, NULL);
 
 
  }

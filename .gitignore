@@ -3,4 +3,9 @@
 *.i  
 *.s     
 *.o     
+*.tar.gz
+output
+toolchain
+sysroot
+
 

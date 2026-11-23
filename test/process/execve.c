@@ -28,9 +28,8 @@ int main(int argc, char const *argv[])
         printf("子进程(%d)开始执行,父进程id:%d\n",getpid(),getppid());
         char path[] = "/home/wfh/桌面/GateWay/test/process/other";
         char *argv[] = {path,"abc",NULL}; //参数数组最后必须为NULL
-        execve(path,argv,NULL); //成功时不返回，失败时返回-1
-        perror("execve");
-        _exit(1);
+        execve(path,argv,NULL); 
+       
     }
     else
     {

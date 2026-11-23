@@ -1,77 +1,57 @@
-# -g 开启gdb的debug调试（生成的二进制文件中包含调试信息）
-# -O0 禁用优化（确保调试一致性）
-# -Wall 显示所有警告
-CFLAGS := -g -O0 -Wall
+CC:=$(CROSS_COMPILE)gcc
 
+BOARD_DIR := $(shell pwd)/
+PEER := root@127.0.0.1
+SSH_PORT := 2222
 
+CFLAGS += -Wall -Wextra
 
-#定义变量
-log:= thirdparty/log/log.c thirdparty/log/log.h
+CFLAGS += -I.
+CFLAGS += -Ithirdparty
+CFLAGS += -Iapp
+CFLAGS += -Idaemon
+CFLAGS += -Iota
 
-json:= thirdparty/json/cJSON.c thirdparty/json/cJSON.h
+ifdef SYSROOT
+	CFLAGS += --sysroot=$(SYSROOT)
+endif
 
-app_common:=app/app_common.c app/app_common.h 
- # 定义伪目标
-.PHONY : log_test
-.PHONY : cjson_test
-.PHONY : app_common_test
-log_test: test/log_test.c  $(log)
+LDLIBS += -lpaho-mqtt3c
+LDLIBS += -lcurl
+LDLIBS += -lcrypto
 
-	gcc $(CFLAGS)  $^ -o $@ -I thirdparty
+SRC += $(shell find app -name "*.c"	-type f)
+SRC += $(shell find daemon -name "*.c"	-type f)
+SRC += $(shell find ota -name "*.c"	-type f)
+SRC += $(shell find thirdparty -name "*.c"	-type f)
 
-	./$@
+OBJ := $(SRC:.c=.o)
 
-	rm $@
+TARGET := gateway
 
+.PHONY: all, clean
 
-cjson_test: test/json_test.c $(json) $(log)
-	gcc $(CFLAGS) $^  -o $@ -I thirdparty
+all: $(TARGET)
 
-	./$@
+clean:
+	@-rm -f $(TARGET) $(OBJ) main.o
 
-	rm $@
+$(TARGET): main.o $(OBJ)
+	@-$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
 
-app_common_test: test/app_common_test.c $(app_common) $(log)
-	gcc $(CFLAGS) $^  -o $@ -I thirdparty -I app
+cross-compile:
+	@CROSS_COMPILE=$(BOARD_DIR)/toolchain/bin/arm-linux-gnueabihf- \
+	 SYSROOT=$(BOARD_DIR)/sysroot \
+	 make -j16
+	@scp -O -P $(SSH_PORT) $(TARGET) $(PEER):/usr/bin/$(TARGET)
 
-	./$@
+#cross-init:
+#	@scp -O init/S99gateway $(PEER):/etc/init.d/S99gateway
 
-	rm $@
+%.o: %.c
+	@-$(CC) $(CFLAGS) -c $^ -o $@
 
-app_message := app/app_message.h app/app_message.c
-app_message_test: test/app_message_test.c $(app_message) $(app_common) $(log) $(json)
-	-gcc $^ -o $@ -I thirdparty -I app 
-	-./$@
-	-rm $@
-
-mqtt_test: test/mqtt_test.c
-	-gcc $^ -o $@ -l paho-mqtt3c
-	-./$@
-	-rm $@
-
-app_mqtt := app/app_mqtt.c app/app_mqtt.h
-.PHONY : app_mqtt_test
-app_mqtt_test: test/app_mqtt_test.c $(app_mqtt) $(log)
-	gcc $(CFLAGS) $(filter %.c,$^) -o $@ -I thirdparty -I app -lpaho-mqtt3c
-	./$@
-	rm $@
-
-app_pool := app/app_pool.c app/app_pool.h
-.PHONY : app_pool_test
-app_pool_test: test/app_pool_test.c $(app_pool) $(log)
-	gcc $(CFLAGS) $(filter %.c,$^) -o $@ -I thirdparty -I app -pthread
-	./$@
-	rm $@
-
-app_buffer := app/app_buffer.c app/app_buffer.h
-.PHONY : app_buffer_test
-app_buffer_test: test/app_buffer_test.c $(app_buffer) $(log)
-	gcc $(CFLAGS) $(filter %.c,$^) -o $@ -I thirdparty -I app -pthread
-	./$@
-	rm $@
-
-.PHONY : testfork
-testfork: test/process/fork.c
-	gcc $(CFLAGS) $< -o $@
-	./$@
-	rm $@
+%_test: test/%_test.o $(OBJ)
+	@-$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+	@-./$@
+	@-rm $@ $^
